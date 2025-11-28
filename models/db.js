@@ -1,20 +1,28 @@
 require('dotenv').config();
-const mysql = require('mysql2');
+const { Pool } = require('pg');
 
-const db = mysql.createConnection({
-  host: 'aws-0-us-west-2.pooler.supabase.com',
-  user: 'postgres.vtigceezhzxalumwlbsz',
-  password: 'bd123',
-  database: 'postgres',
-  port: 5432,
+const connectionString = process.env.DATABASE_URL || (
+  process.env.DB_USER && process.env.DB_PASSWORD && process.env.DB_HOST && process.env.DB_NAME
+    ? `postgresql://${process.env.DB_USER}:${process.env.DB_PASSWORD}@${process.env.DB_HOST}:${process.env.DB_PORT || 5432}/${process.env.DB_NAME}`
+    : null
+);
+
+const pool = new Pool({
+  connectionString,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 
-db.connect((err) => {
-  if (err) {
-    console.error('Error al conectar a la base de datos:', err);
-  } else {
-    console.log('Conectado a la base de datos Supabase');
-  }
+pool.on('error', (err) => {
+  console.error('Unexpected error on idle client', err);
 });
 
-module.exports = db;
+// Compatibilidad con llamadas estilo mysql2: db.query(sql, params, cb)
+module.exports = {
+  query: (text, params, cb) => {
+    if (typeof params === 'function') { cb = params; params = []; }
+    pool.query(text, params)
+      .then(res => cb(null, res.rows))
+      .catch(err => cb(err));
+  },
+  pool
+};
