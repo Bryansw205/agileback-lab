@@ -18,7 +18,8 @@ if (process.env.NODE_ENV === 'production') {
 
 // CORS: permite múltiples orígenes
 const allowedOrigins = [
-  'https://agilefront-lab-gamma.vercel.app'
+  'https://agilefront-lab-gamma.vercel.app',
+  'http://localhost:5173' // O el puerto que use tu frontend de Vite
 ];
 
 app.use(cors({

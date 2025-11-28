@@ -24,5 +24,5 @@ module.exports = {
       .then(res => cb(null, res.rows))
       .catch(err => cb(err));
   },
-  pool
+  pool // Exportamos el pool para poder usarlo en transacciones manuales
 };
