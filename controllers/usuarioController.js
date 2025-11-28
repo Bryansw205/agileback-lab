@@ -1,5 +1,5 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 const db = require('../models/db');
+const bcrypt = require('bcrypt'); // si lo usas
 
 // Verificar si el usuario está autenticado
 exports.verificarSesion = (req, res) => {
@@ -10,17 +10,6 @@ exports.verificarSesion = (req, res) => {
     }
 };
 
-export const login = async (usuario, contraseña) => {
-    const response = await fetch(`${API_URL}/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ usuario, contraseña })
-    });
-    return response.json();
-};
-
-// Para backend, usa process.env:
 exports.login = (req, res) => {
   const { usuario, contraseña } = req.body;
   
@@ -34,8 +23,14 @@ exports.login = (req, res) => {
     }
     
     const user = result[0];
-    // Verificar contraseña aquí (bcrypt)
+    // Verificar contraseña (bcrypt.compare si está hasheada)
     
+    req.session.usuario = user.id;
     res.json({ success: true, usuario: user.usuario });
   });
+};
+
+exports.logout = (req, res) => {
+  req.session.destroy();
+  res.json({ success: true });
 };
