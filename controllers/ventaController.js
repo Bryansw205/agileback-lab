@@ -1,3 +1,6 @@
+const db = require('../models/db');
+const moment = require('moment-timezone');
+
 // Obtener detalle de una venta
 exports.detalleVenta = (req, res) => {
   const id_venta = req.params.id;
@@ -39,69 +42,80 @@ exports.detalleVenta = (req, res) => {
     });
   });
 };
-const db = require('../models/db');
-const moment = require('moment-timezone');
 
 // Registrar una venta
-exports.registrarVenta = (req, res) => {
-  const { id_cliente, total, medio_compra, tipo_pago, forma_pago, productos, fiado } = req.body;
-  // Tomar el id_usuario de la sesión
+exports.registrarVenta = async (req, res) => {
+  const { id_cliente, medio_compra, tipo_pago, forma_pago, productos, fiado } = req.body;
   const id_usuario = req.session?.usuario?.id_usuario;
+
   if (!id_usuario) {
     return res.status(401).json({ error: 'No autenticado' });
   }
-  // Usar fecha actual en formato DATETIME, zona horaria Perú
+
+  // Validaciones básicas
+  if (!id_cliente || !productos || productos.length === 0) {
+    return res.status(400).json({ error: 'Faltan datos requeridos para la venta.' });
+  }
+
   const fecha = moment().tz('America/Lima').format('YYYY-MM-DD HH:mm:ss');
-  db.beginTransaction(err => {
-    if (err) return res.status(500).json({ error: 'Error al iniciar transacción' });
-    db.query(
-      'INSERT INTO venta (id_cliente, id_usuario, fecha, total, medio_compra, tipo_pago, forma_pago) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [id_cliente, id_usuario, fecha, total, medio_compra, tipo_pago, forma_pago],
-      (err, result) => {
-        if (err) {
-          console.error('Error MySQL al guardar venta:', err);
-          return db.rollback(() => res.status(500).json({ error: err.message, code: err.code }));
-        }
-        const id_venta = result.insertId;
-        // Insertar detalleVenta uno por uno
-        let detalleError = false;
-        let detallesInsertados = 0;
-        productos.forEach((p, idx) => {
-          db.query(
-            'INSERT INTO detalleVenta (id_venta, id_producto, cantidad, precio_cobrado, subtotal) VALUES (?, ?, ?, ?, ?)',
-            [id_venta, p.id_producto, p.cantidad, p.precio, p.subtotal],
-            (err) => {
-              if (detalleError) return;
-              if (err) {
-                detalleError = true;
-                return db.rollback(() => res.status(500).json({ error: 'Error al guardar detalleVenta' }));
-              }
-              detallesInsertados++;
-              if (detallesInsertados === productos.length) {
-                // Si es fiado, guardar en tabla fiado
-                if (forma_pago === 'fiado' && fiado) {
-                  db.query(
-                    'INSERT INTO fiado (id_venta, estado_pago, fecha_limite_pago) VALUES (?, ?, ?)',
-                    [id_venta, 'pendiente', fiado.fecha_limite_pago],
-                    (err) => {
-                      if (err) return db.rollback(() => res.status(500).json({ error: 'Error al guardar fiado' }));
-                      db.commit(err => {
-                        if (err) return db.rollback(() => res.status(500).json({ error: 'Error al finalizar venta' }));
-                        res.json({ success: true, id_venta });
-                      });
-                    }
-                  );
-                } else {
-                  db.commit(err => {
-                    if (err) return db.rollback(() => res.status(500).json({ error: 'Error al finalizar venta' }));
-                    res.json({ success: true, id_venta });
-                  });
-                }
-              }
-            }
-          );
-        });
+  const client = await db.pool.connect(); // Obtener un cliente del pool
+
+  try {
+    await client.query('BEGIN'); // Iniciar transacción
+
+    // 1. Insertar en la tabla 'venta'
+    // El total se deja en 0 inicialmente, los triggers lo calcularán
+    const ventaInsertQuery = `
+      INSERT INTO venta (id_cliente, id_usuario, fecha, total, medio_compra, tipo_pago, forma_pago) 
+      VALUES ($1, $2, $3, 0, $4, $5, $6) 
+      RETURNING id_venta;
+    `;
+    const ventaValues = [id_cliente, id_usuario, fecha, medio_compra, tipo_pago, forma_pago];
+    const ventaResult = await client.query(ventaInsertQuery, ventaValues);
+    const id_venta = ventaResult.rows[0].id_venta;
+
+    // 2. Insertar cada producto en 'detalleVenta'
+    // Usamos Promise.all para ejecutar todas las inserciones en paralelo
+    const detallePromises = productos.map(p => {
+      const detalleInsertQuery = `
+        INSERT INTO detalleVenta (id_venta, id_producto, cantidad, precio_cobrado, subtotal) 
+        VALUES ($1, $2, $3, $4, $5);
+      `;
+      // El frontend envía 'precio', que usamos como 'precio_cobrado'
+      const detalleValues = [id_venta, p.id_producto, p.cantidad, p.precio, p.subtotal];
+      return client.query(detalleInsertQuery, detalleValues);
+    });
+    
+    await Promise.all(detallePromises);
+
+    // 3. Si es 'fiado', insertar en la tabla 'fiado'
+    if (forma_pago === 'fiado' && fiado) {
+      if (!fiado.fecha_limite_pago) {
+        throw new Error('La fecha límite de pago es requerida para un fiado.');
       }
-    );
-  });
+      const fiadoInsertQuery = `
+        INSERT INTO fiado (id_venta, estado_pago, fecha_limite_pago) 
+        VALUES ($1, 'pendiente', $2);
+      `;
+      await client.query(fiadoInsertQuery, [id_venta, fiado.fecha_limite_pago]);
+    }
+
+    await client.query('COMMIT'); // Finalizar la transacción
+    
+    res.json({ success: true, id_venta });
+
+  } catch (error) {
+    await client.query('ROLLBACK'); // Revertir en caso de error
+    console.error('Error en transacción de venta:', error);
+    // Devuelve un mensaje de error más específico si es una excepción de la base de datos
+    if (error.routine && (error.routine.includes('RI_FKey_') || error.routine.includes('check_violation'))) {
+        return res.status(400).json({ error: 'Error de validación de datos. Verifique que el cliente y los productos existan.' });
+    }
+    if (error.message.includes('stock')) {
+       return res.status(400).json({ error: 'No hay suficiente stock para uno de los productos.' });
+    }
+    res.status(500).json({ error: 'Error al registrar la venta.', detalle: error.message });
+  } finally {
+    client.release(); // Liberar el cliente de vuelta al pool
+  }
 };
