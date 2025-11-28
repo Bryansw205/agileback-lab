@@ -18,7 +18,6 @@ if (process.env.NODE_ENV === 'production') {
 
 // CORS: permite múltiples orígenes
 const allowedOrigins = [
-  'http://localhost:5173',
   'https://agilefront-lab-gamma.vercel.app'
 ];
 
