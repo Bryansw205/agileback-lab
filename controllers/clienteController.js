@@ -23,7 +23,7 @@ exports.getTodosClientes = (req, res) => {
       return res.status(400).json({ error: 'Nombre y apellidos son obligatorios' });
     }
     db.query(
-      'INSERT INTO cliente (nombre, apellidos, direccion, telefono, activo) VALUES (?, ?, ?, ?, ?)',
+      'INSERT INTO cliente (nombre, apellidos, direccion, telefono, activo) VALUES ($1, $2, $3, $4, $5)',
       [nombre, apellidos, direccion || '', telefono || '', true],
       (err, result) => {
         if (err) return res.status(500).json({ error: 'Error al crear cliente', detalle: err.message });
@@ -38,7 +38,7 @@ exports.getTodosClientes = (req, res) => {
       const { nombre, apellidos, direccion, telefono, activo } = req.body;
       const activoValue = (activo === true || activo === 'true' || activo === 1 || activo === '1') ? 1 : 0;
       db.query(
-        'UPDATE cliente SET nombre=?, apellidos=?, direccion=?, telefono=?, activo=? WHERE id_cliente=?',
+        'UPDATE cliente SET nombre=$1, apellidos=$2, direccion=$3, telefono=$4, activo=$5 WHERE id_cliente=$6',
         [nombre, apellidos, direccion || '', telefono || '', activoValue, id_cliente],
         (err) => {
           if (err) return res.status(500).json({ error: 'Error al editar cliente', detalle: err.message });
@@ -51,8 +51,8 @@ exports.getTodosClientes = (req, res) => {
     exports.deshabilitarCliente = (req, res) => {
       const { id_cliente } = req.params;
       db.query(
-        'UPDATE cliente SET activo=FALSE WHERE id_cliente=?',
-        [id_cliente],
+        'UPDATE cliente SET activo=FALSE WHERE id_cliente=$1',
+        [parseInt(id_cliente)],
         (err) => {
           if (err) return res.status(500).json({ error: 'Error al deshabilitar cliente', detalle: err.message });
           res.json({ success: true });
