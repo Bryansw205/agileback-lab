@@ -7,17 +7,17 @@ exports.detalleVenta = (req, res) => {
     SELECT v.id_venta, v.fecha, v.total, v.medio_compra, v.tipo_pago, v.forma_pago,
            c.nombre AS cliente_nombre, c.apellidos AS cliente_apellidos
       FROM venta v
-      JOIN cliente c ON v.id_cliente = c.id_cliente_cliente
+      JOIN cliente c ON v.id_cliente = c.id_cliente
       WHERE v.id_venta = $1
   `, [id_venta], (err, ventaRows) => {
     if (err || ventaRows.length === 0) return res.status(404).json({ error: 'Venta no encontrada' });
     const venta = ventaRows[0];
     // Consulta productos del detalle
     db.query(`
-      SELECT p.nombre AS producto, dv.cantidad, dv.precio_cobrado, dv.subtotal_cobrado
+      SELECT p.nombre AS producto, dv.cantidad, dv.precio_cobrado, dv.subtotal
         FROM detalleVenta dv
         JOIN producto p ON dv.id_producto = p.id_producto
-        WHERE dv.id_venta = ?
+        WHERE dv.id_venta = $1
     `, [id_venta], (err, productos) => {
       if (err) return res.status(500).json({ error: 'Error al obtener productos' });
       // Calcular subtotal e IGV

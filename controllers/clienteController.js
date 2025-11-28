@@ -2,7 +2,7 @@ const db = require('../models/db');
 
 // Solo clientes activos (para ventas)
 exports.getClientes = (req, res) => {
-  db.query('SELECT id_cliente, nombre, apellidos, direccion, telefono, activo FROM cliente WHERE activo=1', (err, results) => {
+  db.query('SELECT id_cliente, nombre, apellidos, direccion, telefono, activo FROM cliente WHERE activo=TRUE', (err, results) => {
     if (err) return res.status(500).json({ error: 'Error al obtener clientes' });
     res.json(results);
   });
@@ -23,11 +23,11 @@ exports.getTodosClientes = (req, res) => {
       return res.status(400).json({ error: 'Nombre y apellidos son obligatorios' });
     }
     db.query(
-      'INSERT INTO cliente (nombre, apellidos, direccion, telefono, activo) VALUES ($1, $2, $3, $4, $5)',
+      'INSERT INTO cliente (nombre, apellidos, direccion, telefono, activo) VALUES ($1, $2, $3, $4, $5) RETURNING id_cliente',
       [nombre, apellidos, direccion || '', telefono || '', true],
       (err, result) => {
         if (err) return res.status(500).json({ error: 'Error al crear cliente', detalle: err.message });
-        res.json({ id_cliente: result.insertId });
+        res.json({ id_cliente: result[0].id_cliente });
       }
     );
   };
@@ -36,10 +36,10 @@ exports.getTodosClientes = (req, res) => {
     exports.editarCliente = (req, res) => {
       const { id_cliente } = req.params;
       const { nombre, apellidos, direccion, telefono, activo } = req.body;
-      const activoValue = (activo === true || activo === 'true' || activo === 1 || activo === '1') ? 1 : 0;
+      const activoValue = (activo === true || activo === 'true' || activo === 1 || activo === '1');
       db.query(
         'UPDATE cliente SET nombre=$1, apellidos=$2, direccion=$3, telefono=$4, activo=$5 WHERE id_cliente=$6',
-        [nombre, apellidos, direccion || '', telefono || '', activoValue, id_cliente],
+        [nombre, apellidos, direccion || '', telefono || '', activoValue, parseInt(id_cliente)],
         (err) => {
           if (err) return res.status(500).json({ error: 'Error al editar cliente', detalle: err.message });
           res.json({ success: true });

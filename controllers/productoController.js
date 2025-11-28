@@ -1,3 +1,5 @@
+const db = require('../models/db');
+
 // Crear producto
 exports.crearProducto = (req, res) => {
   const { nombre, categoria, precio, stock, activo } = req.body;
@@ -5,11 +7,11 @@ exports.crearProducto = (req, res) => {
     return res.status(400).json({ error: 'Nombre, precio y stock son obligatorios' });
   }
   db.query(
-    'INSERT INTO producto (nombre, categoria, precio, stock, activo) VALUES ($1, $2, $3, $4, $5)',
+    'INSERT INTO producto (nombre, categoria, precio, stock, activo) VALUES ($1, $2, $3, $4, $5) RETURNING id_producto',
     [nombre, categoria || '', precio, stock, activo !== false],
     (err, result) => {
       if (err) return res.status(500).json({ error: 'Error al crear producto', detalle: err.message });
-      res.json({ id_producto: result.insertId });
+      res.json({ id_producto: result[0].id_producto });
     }
   );
 };
@@ -26,7 +28,6 @@ exports.editarProducto = (req, res) => {
     }
   );
 };
-const db = require('../models/db');
 
 exports.getProductos = (req, res) => {
   db.query('SELECT id_producto, nombre, categoria, precio, stock, activo FROM producto', (err, results) => {
