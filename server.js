@@ -18,7 +18,7 @@ if (process.env.NODE_ENV === 'production') {
 
 // CORS: permite múltiples orígenes
 const allowedOrigins = [
-  'https://bodegaja.vercel.app',
+  'https://bodegajaa.vercel.app',
   'http://localhost:5173' // O el puerto que use tu frontend de Vite
 ];
 
