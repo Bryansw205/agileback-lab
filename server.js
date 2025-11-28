@@ -11,20 +11,42 @@ const fiadoRoutes = require('./routes/fiadoRoutes');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware
+// Confía en proxy si estás en producción
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
+
+// CORS: permite múltiples orígenes
+const allowedOrigins = [
+  'http://localhost:5173',
+  'https://agilefront-lab-gamma.vercel.app'
+];
+
 app.use(cors({
-  origin: 'http://localhost:5173',
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Origen no permitido por CORS'));
+    }
+  },
   credentials: true
 }));
+
 app.use(express.json());
+
 app.use(session({
   secret: 'tu_secreto_aqui',
   resave: false,
-  saveUninitialized: true,
-  cookie: { secure: false }
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    httpOnly: true,
+    maxAge: 1000 * 60 * 60 * 24 // por ejemplo, 1 día
+  }
 }));
 
-// Rutas
 app.use('/api', ventaRoutes);
 app.use('/api', productoRoutes);
 app.use('/api', clienteRoutes);
